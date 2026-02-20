@@ -1,0 +1,96 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{titlesec}
+\usepackage{enumitem}
+
+\title{Week 1 Progress Report: Secure Cloud Application Architecture}
+\author{Aastik Bansal [23114002] \and Abdullah Azeem [23114003]}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\section{Executive Summary}
+We have successfully completed the objectives for Week 1 of the "Secure Cloud Application Architecture" project. The core infrastructure has been deployed using Docker, establishing a secure environment with segmented networks. Key security features including SSL/TLS termination, JWT-based authentication, and basic Role-Based Access Control (RBAC) foundation have been implemented.
+
+\section{Architecture Implementation}
+The system follows the proposed defense-in-depth architecture with the following components currently running:
+
+\subsection{Infrastructure \& Networking}
+\begin{itemize}
+    \item \textbf{Containerization}: All services (Client, Gateway, App Server, Database) are containerized using Docker.
+    \item \textbf{Network Segmentation}:
+    \begin{itemize}
+        \item \texttt{public\_net}: Connects Client $\rightarrow$ API Gateway.
+        \item \texttt{dmz\_net}: Connects API Gateway $\rightarrow$ Application Server (Internal Access Only).
+        \item \texttt{internal\_net}: Connects Application Server $\rightarrow$ Database (Isolated from Gateway/Public).
+    \end{itemize}
+    \item \textbf{Service Management}: Created \texttt{start\_services.sh} and \texttt{stop\_services.sh} for reliable lifecycle management.
+\end{itemize}
+
+\subsection{Component Status}
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lp{10cm}@{}}
+\toprule
+\textbf{Component} & \textbf{Status \& Details} \\ \midrule
+\textbf{Client} & \textbf{Operational}. Simple HTML/JS interface for Login/Register. Served via Nginx. \\
+\textbf{API Gateway} & \textbf{Operational}. Nginx acting as Reverse Proxy. Handles \textbf{SSL/TLS} (Self-Signed) and Rate Limiting. \\
+\textbf{App Server} & \textbf{Operational}. FastAPI backend. Implements Business Logic and Auth. \\
+\textbf{Database} & \textbf{Operational}. PostgreSQL 15. Stores Users and Roles. Persistent storage via volumes. \\ \bottomrule
+\end{tabular}
+\caption{Component Status Summary}
+\end{table}
+
+\section{Security Features Implemented}
+
+\subsection{Authentication \& Authorization}
+\begin{itemize}
+    \item \textbf{JWT (JSON Web Tokens)}:
+    \begin{itemize}
+        \item Users can Register and Login.
+        \item Successful login returns an \texttt{access\_token} containing the user's \texttt{role}.
+        \item Passwords are hashed using \textbf{Bcrypt} before storage.
+    \end{itemize}
+    \item \textbf{RBAC Foundation}:
+    \begin{itemize}
+        \item Database schema supports \texttt{role} field (default: 'user').
+        \item Tokens carry role information for future endpoint protection.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Network Security}
+\begin{itemize}
+    \item \textbf{SSL/TLS Termination}:
+    \begin{itemize}
+        \item API Gateway listens on port 443 (mapped to 8443).
+        \item Encrypts traffic between Client and Gateway.
+    \end{itemize}
+    \item \textbf{Reverse Proxying}:
+    \begin{itemize}
+        \item Direct access to the App Server and Database is blocked from the host (except via mapped ports for debugging, which are restricted in production).
+        \item All API requests are routed through \texttt{/api} on the Gateway.
+    \end{itemize}
+\end{itemize}
+
+\section{Challenges \& Resolutions}
+\begin{itemize}
+    \item \textbf{Self-Signed Certificates}: Browsers flag the certificate as insecure. \\
+    \textit{Resolution}: Added instructions to bypass the warning for development testing.
+    \item \textbf{Service Orchestration}: Ensuring Database is ready before App Server starts. \\
+    \textit{Resolution}: Implemented a retry mechanism in \texttt{main.py} (\texttt{get\_engine} with retries).
+\end{itemize}
+
+\section{Next Steps (Week 2)}
+The foundation is stable. We are ready to proceed to \textbf{Task 3: Automated Threat Modeling}:
+\begin{enumerate}
+    \item Verify exact Trust Boundaries.
+    \item Simulate attacks (Brute Force, SQLi).
+    \item Enhance Logging for the Security Module.
+\end{enumerate}
+
+\end{document}

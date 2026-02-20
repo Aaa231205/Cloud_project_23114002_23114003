@@ -1,0 +1,69 @@
+version: '3.8'
+
+services:
+  # 1. Client (Web Interface)
+  client:
+    build: ./client
+    container_name: client_container
+    ports:
+      - "8080:80"
+    networks:
+      - public_net
+    depends_on:
+      - api_gateway
+
+  # 2. API Gateway (Reverse Proxy & SSL Termination)
+  api_gateway:
+    build: ./api_gateway
+    container_name: gateway_container
+    ports:
+      - "8443:443"
+      - "8001:80"
+    networks:
+      - public_net
+      - dmz_net
+    depends_on:
+      - app_server
+
+  # 3. Application Server (Backend Logic)
+  app_server:
+    build: ./application_server
+    container_name: app_server_container
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/cloud_db
+      - SECRET_KEY=supersecretkey
+    networks:
+      - dmz_net
+      - internal_net
+    depends_on:
+      - db
+
+  # 4. Data Storage Service (Database)
+  db:
+    image: postgres:15-alpine
+    container_name: db_container
+    restart: always
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=cloud_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - internal_net
+
+networks:
+  public_net:
+    driver: bridge
+  dmz_net:
+    driver: bridge
+    internal: true
+  internal_net:
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres_data:

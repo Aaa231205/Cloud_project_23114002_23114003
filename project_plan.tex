@@ -1,0 +1,143 @@
+\documentclass[a4paper,11pt]{article}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{titlesec}
+\usepackage{enumitem}
+
+% Title Page
+\title{Assignment 3: Secure Cloud Application Architecture \\ \& Automated Threat Modeling Plan}
+\author{Aastik Bansal [23114002], Abdullah Azeem [23114003]}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+\newpage
+
+\section{Introduction}
+Modern cloud applications face evolving security threats due to their distributed nature. This project aims to design a robust architecture that not only withstands attacks but also proactively identifies and mitigates risks through automation. The system will simulate a real-world environment with a client, API gateway, application servers, and a secure data storage, monitored by a central security module.
+
+\section{System Architecture}
+The proposed architecture follows a defense-in-depth approach, ensuring security at multiple layers.
+
+\subsection{Components}
+\begin{itemize}
+    \item \textbf{Client}: A web-based interface for user interaction.
+    \item \textbf{API Gateway / Reverse Proxy}: The entry point for all external traffic, handling SSL termination, rate limiting, and initial request validation.
+    \item \textbf{Application Server(s)}: Backend services processing business logic, running in a private subnet.
+    \item \textbf{Data Storage Service}: A secure database (e.g., PostgreSQL) for persistent data, accessible only by the application servers.
+    \item \textbf{Security Monitoring \& Logging Module}: A centralized service aggregating logs, detecting anomalies, and triggering automated mitigation.
+\end{itemize}
+
+\subsection{Trust Boundaries}
+\begin{itemize}
+    \item \textbf{External vs. DMZ}: The boundary between the public internet and the API Gateway.
+    \item \textbf{DMZ vs. Private Network}: The boundary between the API Gateway and the internal Application Servers.
+    \item \textbf{Application vs. Data}: The restricted access channel between the App Server and the Database.
+\end{itemize}
+
+\section{Authentication and Authorization}
+To ensure secure access control, the system implements a robust identity management strategy.
+
+\subsection{Authentication (AuthN)}
+We utilize \textbf{JSON Web Tokens (JWT)} for stateless authentication.
+\begin{itemize}
+    \item \textbf{Token Issuance}: Upon successful login, the server issues an Access Token (short-lived, e.g., 15 minutes) and a Refresh Token (long-lived, e.g., 7 days).
+    \item \textbf{Storage}: Access tokens are stored in memory (or short-lived cookies), while refresh tokens are stored in secure, HttpOnly cookies to prevent XSS attacks.
+    \item \textbf{Validation}: The API Gateway validates the JWT signature (HMAC-SHA256 or RSA) on every request before forwarding it to the application server.
+\end{itemize}
+
+\subsection{Authorization (AuthZ)}
+\textbf{Role-Based Access Control (RBAC)} is enforced to restrict access based on user roles.
+\begin{itemize}
+    \item \textbf{Admin}: Full access to system configurations, user management, and logs.
+    \item \textbf{User}: Access to own profile and standard application features.
+    \item \textbf{Auditor}: Read-only access to security logs and threat reports.
+\end{itemize}
+Policy enforcement points (PEPs) are located at the API Gateway for course-grained control and at the Application Layer for fine-grained control.
+
+\section{Threat Modeling (STRIDE)}
+We apply the STRIDE methodology to identify potential threats across the system components.
+
+\begin{table}[h]
+\centering
+\begin{tabular}{|l|l|l|}
+\hline
+\textbf{Threat Type} & \textbf{Component} & \textbf{Description} \\ \hline
+\textbf{S}poofing    & Client / API       & Attacker impersonating a legitimate user via stolen tokens. \\ \hline
+\textbf{T}ampering   & Data Storage       & SQL injection or modifying data in transit. \\ \hline
+\textbf{R}epudiation & App Server         & User denying an action due to lack of sufficient logging. \\ \hline
+\textbf{I}nformation Disclosure & API & Leaking sensitive data (PII) in error messages or logs. \\ \hline
+\textbf{D}enial of Service & API Gateway & Overwhelming the system with requests (DDoS). \\ \hline
+\textbf{E}levation of Privilege & App Server & Regular user gaining admin access via RBAC flaw. \\ \hline
+\end{tabular}
+\caption{STRIDE Threat Analysis}
+\end{table}
+
+\section{Automated Risk Mitigation Strategies}
+The system enables proactive defense mechanisms triggered by real-time events.
+
+\subsection{Rate Limiting \& Throttling}
+Implemented at the API Gateway using a \textit{Leaky Bucket} or \textit{Token Bucket} algorithm.
+\begin{itemize}
+    \item \textbf{Global Limit}: Max 1000 requests/minute to protect infrastructure.
+    \item \textbf{Per-IP Limit}: Max 60 requests/minute per client IP.
+\end{itemize}
+
+\subsection{Automated Blocking (Fail2Ban Style)}
+The Security Module monitors logs for repeated failures.
+\begin{itemize}
+    \item \textbf{Condition}: If an IP addresses generates $>5$ failed login attempts within 1 minute.
+    \item \textbf{Action}: The IP is added to a temporary blacklist for 15 minutes.
+    \item \textbf{Account Lockout}: After 5 consecutive failed password attempts, the account is locked for 30 minutes, requiring email verification to unlock.
+\end{itemize}
+
+\subsection{Circuit Breakers}
+To prevent cascading failures during high load or partial outages, circuit breakers are used in inter-service communication. If a service (e.g., Database) fails repeatedly, the circuit opens, returning a strict error immediately instead of waiting for timeouts.
+
+\subsection{Input Validation \& Sanitization}
+Strict whitelist-based validation is enforced at the API Gateway to neutralize Injection attacks (SQLi, XSS) before they reach the application logic.
+
+\section{3-Week Simulation Plan}
+
+\subsection{Week 1: Foundation \& Architecture}
+\textbf{Objective}: Establish the core infrastructure and secure communication channels.
+\begin{itemize}
+    \item \textbf{Days 1-2}: Set up the simulated environment (Docker containers for Client, Gateway, App Server, DB).
+    \item \textbf{Days 3-4}: Implement JWT-based Authentication and RBAC mechanisms.
+    \item \textbf{Days 5-7}: Configure the API Gateway with SSL/TLS and basic request validation. Establish secure logging pipelines.
+\end{itemize}
+
+\subsection{Week 2: Threat Modeling \& Attack Simulation}
+\textbf{Objective}: Identify vulnerabilities and simulate attacks to test defenses.
+\begin{itemize}
+    \item \textbf{Days 1-3}: Run automated threat modeling tools (e.g., OWASP ZAP, Python scripts) against the architecture.
+    \item \textbf{Days 4-7}: Develop and run attack simulation scripts:
+    \begin{itemize}
+        \item \textit{Brute-force attack} on the login endpoint.
+        \item \textit{SQL Injection} attempts on data retrieval endpoints.
+        \item \textit{DoS Simulation} using high-volume request scripts.
+    \end{itemize}
+\end{itemize}
+
+\subsection{Week 3: Automated Mitigation \& Resilience Evaluation}
+\textbf{Objective}: Implement automated defenses and measure system recovery.
+\begin{itemize}
+    \item \textbf{Days 1-3}: Implement the Security Module logic for IP blocking and account lockout.
+    \item \textbf{Days 4-5}: Run full-scale resilience tests. Measure:
+    \begin{itemize}
+        \item \textit{Time to Detect}: How fast the logging module flags an anomaly.
+        \item \textit{Time to Mitigate}: Latency between detection and active blocking.
+    \end{itemize}
+    \item \textbf{Days 6-7}: Compile logs, generate evidence screenshots, and finalize the report.
+\end{itemize}
+
+\section{Conclusion}
+This plan ensures a structured approach to building a secure cloud architecture. By simulating real-world threats and implementing robust AuthN/AuthZ and automated mitigation, we demonstrate the system's resilience and adherence to security best practices.
+
+\end{document}
