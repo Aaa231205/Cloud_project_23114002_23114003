@@ -1,6 +1,5 @@
 #!/bin/bash
 
-# Configuration
 API_URL="https://localhost:8443/api"
 USERNAME="testuser_$(date +%s)"
 PASSWORD="password123"
@@ -50,7 +49,6 @@ echo "Response: $FAIL_RESPONSE"
 if [[ $FAIL_RESPONSE == *"Not authenticated"* ]] || [[ $FAIL_RESPONSE == *"Missing"* ]]; then
     echo "SUCCESS: Unauthorized access blocked."
 else
-     # FastAPI default 401 detail is "Not authenticated"
      if [[ $FAIL_RESPONSE == *"detail"* ]]; then
         echo "SUCCESS: Error returned as expected."
      else
