@@ -33,6 +33,8 @@ docker run -d --name app_server_container \
     --network internal_net \
     -e DATABASE_URL=postgresql://user:password@db_container:5432/cloud_db \
     -e SECRET_KEY=supersecretkey \
+    -v $(pwd)/security_modules:/app/security_modules \
+    -v $(pwd)/logs:/app/logs \
     cloud_project_app_server
 
 # connect to dmz_net

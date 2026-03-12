@@ -6,7 +6,6 @@
 *.fls
 *.fdb_latexmk
 *.synctex.gz
-*.md
 *.tex
 
 # Python

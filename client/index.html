@@ -1,19 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure Cloud App</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
-        .container { border: 1px solid #ccc; padding: 20px; border-radius: 5px; margin-bottom: 20px; }
-        input, button { margin: 5px 0; padding: 5px; width: 100%; box-sizing: border-box; }
-        #output { background: #f0f0f0; padding: 10px; border-radius: 5px; white-space: pre-wrap; }
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        input,
+        button {
+            margin: 5px 0;
+            padding: 5px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        #output {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
     </style>
 </head>
+
 <body>
     <h1>Secure Cloud App Client</h1>
-    
+
     <div class="container">
         <h2>Register</h2>
         <input type="text" id="reg-username" placeholder="Username">
@@ -52,8 +78,14 @@
                 const res = await fetch(`${API_URL}/auth/register?username=${username}&password=${password}`, {
                     method: 'POST'
                 });
-                const data = await res.json();
-                log(JSON.stringify(data, null, 2));
+                const contentType = res.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    const data = await res.json();
+                    log(JSON.stringify(data, null, 2));
+                } else {
+                    const text = await res.text();
+                    log(`Error ${res.status}: Received non-JSON response.\n${text.substring(0, 150)}...`);
+                }
             } catch (e) {
                 log('Error: ' + e);
             }
@@ -72,12 +104,18 @@
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: formData
                 });
-                const data = await res.json();
-                if (data.access_token) {
-                    localStorage.setItem('token', data.access_token);
-                    log('Login successful. Token saved.');
+                const contentType = res.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    const data = await res.json();
+                    if (data.access_token) {
+                        localStorage.setItem('token', data.access_token);
+                        log('Login successful. Token saved.');
+                    } else {
+                        log(JSON.stringify(data, null, 2));
+                    }
                 } else {
-                    log(JSON.stringify(data, null, 2));
+                    const text = await res.text();
+                    log(`Error ${res.status}: Received non-JSON response.\n${text.substring(0, 150)}...`);
                 }
             } catch (e) {
                 log('Error: ' + e);
@@ -94,12 +132,19 @@
                 const res = await fetch(`${API_URL}/users/me`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
-                const data = await res.json();
-                log(JSON.stringify(data, null, 2));
+                const contentType = res.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    const data = await res.json();
+                    log(JSON.stringify(data, null, 2));
+                } else {
+                    const text = await res.text();
+                    log(`Error ${res.status}: Received non-JSON response.\n${text.substring(0, 150)}...`);
+                }
             } catch (e) {
                 log('Error: ' + e);
             }
         }
     </script>
 </body>
+
 </html>
