@@ -48,6 +48,37 @@ This script will test:
 - Accessing a protected endpoint with the token
 - Attempting to access a protected endpoint without authentication to verify security measures
 
+### Running Security Attack Simulations
+
+The project includes three Python scripts to simulate attacks against the API Gateway (`https://localhost:8443/`) and verify the application's rate limiting and security measures. 
+
+To run these scripts, you will need Python 3 installed and the `requests` library.
+
+**1. Setup a Python environment (Optional but Recommended):**
+```bash
+python3 -m venv venv
+source venv/bin/activate
+pip install requests
+```
+
+**2. Run the Attack Scripts:**
+Navigate to the `security_modules/attack_scripts` directory and execute the scripts directly:
+
+- **Brute Force Attack:** Simulates trying multiple passwords for the `admin` user to trigger the account lockout and IP blocking security measures.
+  ```bash
+  python3 security_modules/attack_scripts/brute_force.py
+  ```
+
+- **Denial of Service (DoS) Attack:** Spawns multiple threads to flood the API gateway with requests. This is used to test the Nginx `limit_req_zone` rate-limiting (HTTP 429).
+  ```bash
+  python3 security_modules/attack_scripts/dos_attack.py
+  ```
+
+- **SQL Injection Attack:** Tests the login endpoint with various common SQL injection payloads to ensure the SQLAlchemy ORM and FastAPI backend properly sanitize inputs and block the attempts.
+  ```bash
+  python3 security_modules/attack_scripts/sql_injection.py
+  ```
+
 ## How to Stop the Project
 
 To safely stop all running services and remove the created Docker networks, run:
