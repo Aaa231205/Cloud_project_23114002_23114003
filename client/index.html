@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Cloud App</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        input,
+        button {
+            margin: 5px 0;
+            padding: 5px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        #output {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 5px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Secure Cloud App Client</h1>
+
+    <div class="container">
+        <h2>Register</h2>
+        <input type="text" id="reg-username" placeholder="Username">
+        <input type="password" id="reg-password" placeholder="Password">
+        <input type="password" id="reg-admin-secret" placeholder="Admin Secret (leave blank for standard user)">
+        <button onclick="register()">Register</button>
+    </div>
+
+    <div class="container">
+        <h2>Login</h2>
+        <input type="text" id="login-username" placeholder="Username">
+        <input type="password" id="login-password" placeholder="Password">
+        <button onclick="login()">Login</button>
+    </div>
+
+    <div class="container">
+        <h2>Protected Endpoints</h2>
+        <button onclick="getProfile()">Get User Profile (Any Role)</button>
+        <button onclick="getAdminDashboard()">Get Admin Dashboard (Admin Only)</button>
+    </div>
+
+    <div class="container">
+        <h3>Output</h3>
+        <div id="output"></div>
+    </div>
+
+    <script>
+        // Force redirect to the secure API Gateway port if the user accidentally goes to port 8080
+        if (window.location.port === "8080") {
+            window.location.href = `https://${window.location.hostname}:8443/`;
+        }
+
+        // Now that we guarantee they are on the Gateway, use a clean relative path
+        const API_URL = '/api';
+
+        function log(msg) {
+            document.getElementById('output').textContent = msg;
+        }
+
+        async function register() {
+            const username = document.getElementById('reg-username').value;
+            const password = document.getElementById('reg-password').value;
+            const adminSecret = document.getElementById('reg-admin-secret').value;
+
+            let queryParams = `username=${username}&password=${password}`;
+            if (adminSecret) {
+                queryParams += `&role=admin&admin_secret=${adminSecret}`;
+            }
+
+            try {
+                const res = await fetch(`${API_URL}/auth/register?${queryParams}`, {
+                    method: 'POST'
+                });
+                const contentType = res.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    const data = await res.json();
+                    log(JSON.stringify(data, null, 2));
+                } else {
+                    const text = await res.text();
+                    log(`Error ${res.status}: Received non-JSON response.\n${text.substring(0, 150)}...`);
+                }
+            } catch (e) {
+                log('Error: ' + e);
+            }
+        }
+
+        async function login() {
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            const formData = new URLSearchParams();
+            formData.append('username', username);
+            formData.append('password', password);
+
+            try {
+                const res = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: formData
+                });
+                const contentType = res.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    const data = await res.json();
+                    if (data.access_token) {
+                        localStorage.setItem('token', data.access_token);
+                        log('Login successful. Token saved.');
+                    } else {
+                        log(JSON.stringify(data, null, 2));
+                    }
+                } else {
+                    const text = await res.text();
+                    log(`Error ${res.status}: Received non-JSON response.\n${text.substring(0, 150)}...`);
+                }
+            } catch (e) {
+                log('Error: ' + e);
+            }
+        }
+
+        async function getProfile() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                log('No token found. Please login.');
+                return;
+            }
+            try {
+                const res = await fetch(`${API_URL}/users/me`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const contentType = res.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    const data = await res.json();
+                    log(JSON.stringify(data, null, 2));
+                } else {
+                    const text = await res.text();
+                    log(`Error ${res.status}: Received non-JSON response.\n${text.substring(0, 150)}...`);
+                }
+            } catch (e) {
+                log('Error: ' + e);
+            }
+        }
+
+        async function getAdminDashboard() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                log('No token found. Please login.');
+                return;
+            }
+            try {
+                const res = await fetch(`${API_URL}/admin/dashboard`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const contentType = res.headers.get("content-type");
+                if (contentType && contentType.includes("application/json")) {
+                    const data = await res.json();
+                    if (res.status !== 200) {
+                        log(`Error ${res.status}: ${data.detail}`);
+                    } else {
+                        log(JSON.stringify(data, null, 2));
+                    }
+                } else {
+                    const text = await res.text();
+                    log(`Error ${res.status}: Received non-JSON response.\n${text.substring(0, 150)}...`);
+                }
+            } catch (e) {
+                log('Error: ' + e);
+            }
+        }
+    </script>
+</body>
+
+</html>

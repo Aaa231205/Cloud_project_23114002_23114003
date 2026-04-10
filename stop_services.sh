@@ -1,0 +1,10 @@
+#!/bin/bash
+set -e
+
+echo "Stopping and removing containers..."
+docker rm -f client_container gateway_container app_server_1 app_server_2 app_server_3 db_container 2>/dev/null || true
+
+echo "Removing networks..."
+docker network rm public_net dmz_net internal_net 2>/dev/null || true
+
+echo "Services stopped and networks removed."
