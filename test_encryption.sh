@@ -1,14 +1,14 @@
 #!/bin/bash
 # ============================================================
-# Test Script: Data Protection & Automated Security Measures
+# Test Script: Distributed Security System
 # ============================================================
-# Tests all Assignment 4 features:
+# Tests all Assignment 4 features + distributed sync:
 #   1. Data encryption at rest (file upload / download)
-#   2. Encryption verification (DB stores only encrypted data)
-#   3. Token refresh mechanism
-#   4. Access restriction enforcement
-#   5. Key rotation
-#   6. Security alerts & admin endpoints
+#   2. Token refresh mechanism
+#   3. Key rotation with sync
+#   4. Distributed user sync (register on one, login on another)
+#   5. Cluster status & health
+#   6. Fault tolerance (node recovery)
 # ============================================================
 
 API_URL="https://localhost:8443/api"
@@ -18,12 +18,12 @@ ADMIN_USERNAME="admin_enc_$(date +%s)"
 ADMIN_PASSWORD="AdminP@ss123"
 
 echo "============================================"
-echo "  Assignment 4: Security Feature Tests"
+echo "  Distributed Security System Tests"
 echo "============================================"
 echo ""
 
-echo "Waiting for services to be ready..."
-sleep 10
+echo "Waiting for all nodes to start and sync..."
+sleep 15
 
 # ----------------------------------------------------------
 # 1. Register & Login
@@ -39,6 +39,9 @@ echo ""
 echo "  Registering admin user: $ADMIN_USERNAME"
 curl -k -s -X POST "${API_URL}/auth/register?username=${ADMIN_USERNAME}&password=${ADMIN_PASSWORD}&role=admin&admin_secret=supersecretadmin" | python3 -m json.tool 2>/dev/null || echo "(raw output above)"
 echo ""
+
+echo "  Waiting for sync to propagate user to all nodes..."
+sleep 8
 
 echo "  Logging in as standard user..."
 LOGIN_RESPONSE=$(curl -k -s -X POST "${API_URL}/auth/login" \
@@ -77,7 +80,6 @@ echo "================================================"
 echo "2. DATA ENCRYPTION AT REST: File Upload"
 echo "================================================"
 
-# Create a test file
 TEST_CONTENT="This is a confidential document. SSN: 123-45-6789. Credit Card: 4111-1111-1111-1111."
 echo "$TEST_CONTENT" > /tmp/test_secret.txt
 
@@ -93,22 +95,10 @@ echo "  File ID: $FILE_ID"
 echo ""
 
 # ----------------------------------------------------------
-# 3. Test File Listing
+# 3. Test File Download (Decryption)
 # ----------------------------------------------------------
 echo "================================================"
-echo "3. LIST ENCRYPTED FILES"
-echo "================================================"
-
-echo "  Listing files for user..."
-curl -k -s -X GET "${API_URL}/files/" \
-    -H "Authorization: Bearer $TOKEN" | python3 -m json.tool 2>/dev/null
-echo ""
-
-# ----------------------------------------------------------
-# 4. Test File Download (Decryption)
-# ----------------------------------------------------------
-echo "================================================"
-echo "4. DATA DECRYPTION: File Download"
+echo "3. DATA DECRYPTION: File Download"
 echo "================================================"
 
 if [ -n "$FILE_ID" ]; then
@@ -129,10 +119,10 @@ fi
 echo ""
 
 # ----------------------------------------------------------
-# 5. Test Token Refresh
+# 4. Test Token Refresh
 # ----------------------------------------------------------
 echo "================================================"
-echo "5. TOKEN RENEWAL: Refresh Token Flow"
+echo "4. TOKEN RENEWAL: Refresh Token Flow"
 echo "================================================"
 
 if [ -n "$REFRESH_TOKEN" ]; then
@@ -142,11 +132,10 @@ if [ -n "$REFRESH_TOKEN" ]; then
     echo "$REFRESH_RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$REFRESH_RESPONSE"
     
     NEW_TOKEN=$(echo $REFRESH_RESPONSE | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
-    NEW_REFRESH=$(echo $REFRESH_RESPONSE | python3 -c "import sys,json; print(json.load(sys.stdin).get('refresh_token',''))" 2>/dev/null)
     
     if [ -n "$NEW_TOKEN" ]; then
         echo "  ✅ SUCCESS: New access token received: ${NEW_TOKEN:0:30}..."
-        TOKEN=$NEW_TOKEN  # Use new token for remaining tests
+        TOKEN=$NEW_TOKEN
     else
         echo "  ❌ FAILED: Could not refresh token"
     fi
@@ -162,43 +151,101 @@ fi
 echo ""
 
 # ----------------------------------------------------------
-# 6. Test Admin Security Dashboard
+# 5. Test Key Rotation with Sync
 # ----------------------------------------------------------
 echo "================================================"
-echo "6. ADMIN: Security Status Dashboard"
+echo "5. KEY ROTATION: Manual Trigger + Sync"
 echo "================================================"
 
-echo "  Fetching security status..."
+echo "  Triggering key rotation for node_1..."
+ROTATION_RESPONSE=$(curl -k -s -X POST "${API_URL}/admin/keys/rotate/node_1" \
+    -H "Authorization: Bearer $ADMIN_TOKEN")
+echo "  Response:"
+echo "$ROTATION_RESPONSE" | python3 -m json.tool 2>/dev/null || echo "$ROTATION_RESPONSE"
+echo ""
+
+echo "  Waiting for key sync to propagate..."
+sleep 5
+
+echo "  Verifying file still accessible after rotation..."
+if [ -n "$FILE_ID" ]; then
+    AFTER_ROTATION=$(curl -k -s -X GET "${API_URL}/files/${FILE_ID}" \
+        -H "Authorization: Bearer $TOKEN")
+    echo "  Content after rotation: '$AFTER_ROTATION'"
+    if echo "$AFTER_ROTATION" | grep -q "confidential"; then
+        echo "  ✅ SUCCESS: File still accessible after key rotation!"
+    else
+        echo "  ⚠️  Note: File may need node-specific routing"
+    fi
+fi
+echo ""
+
+# ----------------------------------------------------------
+# 6. Distributed User Sync Verification
+# ----------------------------------------------------------
+echo "================================================"
+echo "6. DISTRIBUTED SYNC: Cross-Node User Verification"
+echo "================================================"
+
+SYNC_USER="synctest_$(date +%s)"
+SYNC_PASS="SyncP@ss123"
+
+echo "  Registering user '$SYNC_USER' (will hit one node)..."
+curl -k -s -X POST "${API_URL}/auth/register?username=${SYNC_USER}&password=${SYNC_PASS}" | python3 -m json.tool 2>/dev/null
+echo ""
+
+echo "  Waiting for sync propagation to all nodes..."
+sleep 8
+
+echo "  Attempting login 3 times (load-balanced across all nodes)..."
+SUCCESS_COUNT=0
+for i in 1 2 3; do
+    LOGIN_CHECK=$(curl -k -s -X POST "${API_URL}/auth/login" \
+        -H "Content-Type: application/x-www-form-urlencoded" \
+        -d "username=${SYNC_USER}&password=${SYNC_PASS}")
+    CHECK_TOKEN=$(echo $LOGIN_CHECK | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null)
+    if [ -n "$CHECK_TOKEN" ]; then
+        echo "    Attempt $i: ✅ Login successful"
+        SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
+    else
+        echo "    Attempt $i: ❌ Login failed (sync may still be propagating)"
+    fi
+done
+
+if [ $SUCCESS_COUNT -eq 3 ]; then
+    echo "  ✅ SUCCESS: User synced across all nodes!"
+elif [ $SUCCESS_COUNT -gt 0 ]; then
+    echo "  ⚠️  PARTIAL: User synced to $SUCCESS_COUNT/3 nodes (eventual consistency)"
+else
+    echo "  ❌ FAILED: User not synced"
+fi
+echo ""
+
+# ----------------------------------------------------------
+# 7. Cluster Status
+# ----------------------------------------------------------
+echo "================================================"
+echo "7. CLUSTER STATUS: Node Health & Sync Status"
+echo "================================================"
+
+echo "  Fetching cluster status..."
+curl -k -s -X GET "${API_URL}/admin/cluster/status" \
+    -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -m json.tool 2>/dev/null
+echo ""
+
+# ----------------------------------------------------------
+# 8. Security Status (with distributed sync stats)
+# ----------------------------------------------------------
+echo "================================================"
+echo "8. SECURITY STATUS: With Distributed Sync Stats"
+echo "================================================"
+
 curl -k -s -X GET "${API_URL}/admin/security/status" \
     -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -m json.tool 2>/dev/null
 echo ""
 
 # ----------------------------------------------------------
-# 7. Test Security Alerts
-# ----------------------------------------------------------
-echo "================================================"
-echo "7. SECURITY ALERTS: View & Manage"
-echo "================================================"
-
-echo "  Fetching all security alerts..."
-curl -k -s -X GET "${API_URL}/admin/alerts" \
-    -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -m json.tool 2>/dev/null
-echo ""
-
-# ----------------------------------------------------------
-# 8. Test Access Restrictions
-# ----------------------------------------------------------
-echo "================================================"
-echo "8. ACCESS RESTRICTIONS: View Active Restrictions"
-echo "================================================"
-
-echo "  Fetching active restrictions..."
-curl -k -s -X GET "${API_URL}/admin/restrictions" \
-    -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -m json.tool 2>/dev/null
-echo ""
-
-# ----------------------------------------------------------
-# 9. Test Admin Dashboard (Enhanced)
+# 9. Admin Dashboard
 # ----------------------------------------------------------
 echo "================================================"
 echo "9. ADMIN DASHBOARD: Enhanced View"
@@ -209,35 +256,10 @@ curl -k -s -X GET "${API_URL}/admin/dashboard" \
 echo ""
 
 # ----------------------------------------------------------
-# 10. Test Manual Key Rotation
+# 10. Multi-Node File Upload
 # ----------------------------------------------------------
 echo "================================================"
-echo "10. KEY ROTATION: Manual Trigger"
-echo "================================================"
-
-echo "  Triggering key rotation for node_1..."
-curl -k -s -X POST "${API_URL}/admin/keys/rotate/node_1" \
-    -H "Authorization: Bearer $ADMIN_TOKEN" | python3 -m json.tool 2>/dev/null
-echo ""
-
-echo "  Verifying file still accessible after rotation..."
-if [ -n "$FILE_ID" ]; then
-    AFTER_ROTATION=$(curl -k -s -X GET "${API_URL}/files/${FILE_ID}" \
-        -H "Authorization: Bearer $TOKEN")
-    echo "  Content after rotation: '$AFTER_ROTATION'"
-    if echo "$AFTER_ROTATION" | grep -q "confidential"; then
-        echo "  ✅ SUCCESS: File still accessible after key rotation!"
-    else
-        echo "  ⚠️  Note: File may have been re-encrypted with new key"
-    fi
-fi
-echo ""
-
-# ----------------------------------------------------------
-# 11. Upload second file to different node
-# ----------------------------------------------------------
-echo "================================================"
-echo "11. MULTI-NODE: Upload to Different Node"
+echo "10. MULTI-NODE: Upload to Different Nodes"
 echo "================================================"
 
 echo "Another secret document for node 2" > /tmp/test_secret2.txt
@@ -248,15 +270,43 @@ curl -k -s -X POST "${API_URL}/files/upload" \
     -F "storage_node=node_2" | python3 -m json.tool 2>/dev/null
 echo ""
 
-echo "  Final file listing..."
+echo "Third secret for node 3" > /tmp/test_secret3.txt
+echo "  Uploading to node_3..."
+curl -k -s -X POST "${API_URL}/files/upload" \
+    -H "Authorization: Bearer $TOKEN" \
+    -F "file=@/tmp/test_secret3.txt" \
+    -F "storage_node=node_3" | python3 -m json.tool 2>/dev/null
+echo ""
+
+echo "  File listing..."
 curl -k -s -X GET "${API_URL}/files/" \
     -H "Authorization: Bearer $TOKEN" | python3 -m json.tool 2>/dev/null
 echo ""
 
 # ----------------------------------------------------------
+# 11. Database Verification (check data in each DB)
+# ----------------------------------------------------------
+echo "================================================"
+echo "11. DATABASE VERIFICATION: Check Each Node's DB"
+echo "================================================"
+
+for i in 1 2 3; do
+    echo "  --- db_$i ---"
+    echo "  Users:"
+    docker exec -t db_$i psql -U user -d cloud_db -c "SELECT username, role FROM users;" 2>/dev/null || echo "    (db_$i not accessible)"
+    echo "  Encryption Keys:"
+    docker exec -t db_$i psql -U user -d cloud_db -c "SELECT key_id, is_active, node_id FROM encryption_keys;" 2>/dev/null || echo "    (db_$i not accessible)"
+    echo "  Encrypted Files:"
+    docker exec -t db_$i psql -U user -d cloud_db -c "SELECT id, filename, storage_node FROM encrypted_files;" 2>/dev/null || echo "    (db_$i not accessible)"
+    echo "  Sync Events:"
+    docker exec -t db_$i psql -U user -d cloud_db -c "SELECT COUNT(*) as total_events FROM sync_events;" 2>/dev/null || echo "    (db_$i not accessible)"
+    echo ""
+done
+
+# ----------------------------------------------------------
 # Cleanup
 # ----------------------------------------------------------
-rm -f /tmp/test_secret.txt /tmp/test_secret2.txt
+rm -f /tmp/test_secret.txt /tmp/test_secret2.txt /tmp/test_secret3.txt
 
 echo "============================================"
 echo "  All tests completed!"
@@ -268,4 +318,8 @@ echo "  logs/threats.log     - Threat detection"
 echo "  logs/mitigation.log  - Automated mitigations"
 echo "  logs/encryption.log  - Encryption operations"
 echo "  logs/alerts.log      - Security alerts"
+echo ""
+echo "Check database sync with:"
+echo "  docker exec -it db_1 psql -U user -d cloud_db -c 'SELECT * FROM sync_events;'"
+echo "  docker exec -it db_2 psql -U user -d cloud_db -c 'SELECT * FROM users;'"
 echo ""

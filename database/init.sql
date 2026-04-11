@@ -87,3 +87,27 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     is_revoked BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- ===== Distributed Synchronization Tables =====
+
+-- Tracks sync events for cross-node replication
+CREATE TABLE IF NOT EXISTS sync_events (
+    id SERIAL PRIMARY KEY,
+    event_id VARCHAR(100) UNIQUE NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
+    table_name VARCHAR(100) NOT NULL,
+    payload JSONB NOT NULL,
+    source_node VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    applied BOOLEAN DEFAULT TRUE
+);
+
+-- Retry queue for failed sync pushes
+CREATE TABLE IF NOT EXISTS sync_retry_queue (
+    id SERIAL PRIMARY KEY,
+    event_id VARCHAR(100) NOT NULL,
+    target_node VARCHAR(255) NOT NULL,
+    retry_count INTEGER DEFAULT 0,
+    last_attempt TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);

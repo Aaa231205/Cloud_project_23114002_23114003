@@ -99,3 +99,27 @@ class RefreshToken(Base):
     expires_at = Column(DateTime, nullable=False)
     is_revoked = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ===== Distributed Synchronization Models =====
+
+class SyncEvent(Base):
+    __tablename__ = "sync_events"
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(String(100), unique=True, nullable=False)
+    event_type = Column(String(50), nullable=False)
+    table_name = Column(String(100), nullable=False)
+    payload = Column(Text, nullable=False)  # JSON string
+    source_node = Column(String(50), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    applied = Column(Boolean, default=True)
+
+
+class SyncRetryQueue(Base):
+    __tablename__ = "sync_retry_queue"
+    id = Column(Integer, primary_key=True, index=True)
+    event_id = Column(String(100), nullable=False)
+    target_node = Column(String(255), nullable=False)
+    retry_count = Column(Integer, default=0)
+    last_attempt = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

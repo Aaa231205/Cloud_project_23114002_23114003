@@ -23,35 +23,70 @@ services:
       - public_net
       - dmz_net
     depends_on:
-      - app_server
+      - app_server_1
+      - app_server_2
+      - app_server_3
 
-  # data storage service (Database)
-  db:
+  # ===== Distributed Databases (one per node) =====
+
+  db_1:
     image: postgres:15-alpine
-    container_name: db_container
+    container_name: db_1
     restart: always
     environment:
       - POSTGRES_USER=user
       - POSTGRES_PASSWORD=password
       - POSTGRES_DB=cloud_db
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data_1:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
       - internal_net
 
-  # application server (Backend Logic)
-  app_server:
+  db_2:
+    image: postgres:15-alpine
+    container_name: db_2
+    restart: always
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=cloud_db
+    volumes:
+      - postgres_data_2:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - internal_net
+
+  db_3:
+    image: postgres:15-alpine
+    container_name: db_3
+    restart: always
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=cloud_db
+    volumes:
+      - postgres_data_3:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - internal_net
+
+  # ===== Distributed Application Servers =====
+
+  app_server_1:
     build: ./application_server
-    container_name: app_server_container
+    container_name: app_server_1
     expose:
       - "8000"
     environment:
-      - DATABASE_URL=postgresql://user:password@db:5432/cloud_db
+      - DATABASE_URL=postgresql://user:password@db_1:5432/cloud_db
       - SECRET_KEY=supersecretkey
       - MASTER_ENCRYPTION_KEY=a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
       - KEY_ROTATION_INTERVAL_HOURS=24
       - TOKEN_REFRESH_INTERVAL_MINUTES=15
+      - NODE_ID=node_1
+      - HOSTNAME=node_1
+      - PEER_NODES=https://app_server_2:8000,https://app_server_3:8000
     networks:
       - dmz_net
       - internal_net
@@ -59,7 +94,53 @@ services:
       - ./security_modules:/app/security_modules
       - ./logs:/app/logs
     depends_on:
-      - db
+      - db_1
+
+  app_server_2:
+    build: ./application_server
+    container_name: app_server_2
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=postgresql://user:password@db_2:5432/cloud_db
+      - SECRET_KEY=supersecretkey
+      - MASTER_ENCRYPTION_KEY=a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
+      - KEY_ROTATION_INTERVAL_HOURS=24
+      - TOKEN_REFRESH_INTERVAL_MINUTES=15
+      - NODE_ID=node_2
+      - HOSTNAME=node_2
+      - PEER_NODES=https://app_server_1:8000,https://app_server_3:8000
+    networks:
+      - dmz_net
+      - internal_net
+    volumes:
+      - ./security_modules:/app/security_modules
+      - ./logs:/app/logs
+    depends_on:
+      - db_2
+
+  app_server_3:
+    build: ./application_server
+    container_name: app_server_3
+    expose:
+      - "8000"
+    environment:
+      - DATABASE_URL=postgresql://user:password@db_3:5432/cloud_db
+      - SECRET_KEY=supersecretkey
+      - MASTER_ENCRYPTION_KEY=a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2
+      - KEY_ROTATION_INTERVAL_HOURS=24
+      - TOKEN_REFRESH_INTERVAL_MINUTES=15
+      - NODE_ID=node_3
+      - HOSTNAME=node_3
+      - PEER_NODES=https://app_server_1:8000,https://app_server_2:8000
+    networks:
+      - dmz_net
+      - internal_net
+    volumes:
+      - ./security_modules:/app/security_modules
+      - ./logs:/app/logs
+    depends_on:
+      - db_3
 
 networks:
   public_net:
@@ -72,4 +153,6 @@ networks:
     internal: true
 
 volumes:
-  postgres_data:
+  postgres_data_1:
+  postgres_data_2:
+  postgres_data_3:
